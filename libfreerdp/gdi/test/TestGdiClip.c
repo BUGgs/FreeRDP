@@ -14,13 +14,18 @@
 
 int test_gdi_ClipCoords(void)
 {
-	int draw;
+	BOOL draw;
 	HGDI_DC hdc;
 	HGDI_RGN rgn1;
 	HGDI_RGN rgn2;
 	HGDI_BITMAP bmp;
 
-	hdc = gdi_GetDC();
+	if (!(hdc = gdi_GetDC()))
+	{
+		printf("failed to get gdi device context\n");
+		return -1;
+	}
+
 	hdc->bytesPerPixel = 4;
 	hdc->bitsPerPixel = 32;
 	bmp = gdi_CreateBitmap(1024, 768, 4, NULL);
@@ -39,7 +44,7 @@ int test_gdi_ClipCoords(void)
 
 	gdi_ClipCoords(hdc, &(rgn1->x), &(rgn1->y), &(rgn1->w), &(rgn1->h), NULL, NULL);
 
-	if (gdi_EqualRgn(rgn1, rgn2) != 1)
+	if (!gdi_EqualRgn(rgn1, rgn2))
 		return -1;
 
 	/* region all inside clipping region */
@@ -49,7 +54,7 @@ int test_gdi_ClipCoords(void)
 
 	gdi_ClipCoords(hdc, &(rgn1->x), &(rgn1->y), &(rgn1->w), &(rgn1->h), NULL, NULL);
 
-	if (gdi_EqualRgn(rgn1, rgn2) != 1)
+	if (!gdi_EqualRgn(rgn1, rgn2))
 		return -1;
 
 	/* region all outside clipping region, on the left */
@@ -59,7 +64,7 @@ int test_gdi_ClipCoords(void)
 
 	draw = gdi_ClipCoords(hdc, &(rgn1->x), &(rgn1->y), &(rgn1->w), &(rgn1->h), NULL, NULL);
 
-	if (draw != 0)
+	if (draw)
 		return -1;
 
 	/* region all outside clipping region, on the right */
@@ -69,7 +74,7 @@ int test_gdi_ClipCoords(void)
 
 	draw = gdi_ClipCoords(hdc, &(rgn1->x), &(rgn1->y), &(rgn1->w), &(rgn1->h), NULL, NULL);
 
-	if (draw != 0)
+	if (draw)
 		return -1;
 
 	/* region all outside clipping region, on top */
@@ -79,7 +84,7 @@ int test_gdi_ClipCoords(void)
 
 	draw = gdi_ClipCoords(hdc, &(rgn1->x), &(rgn1->y), &(rgn1->w), &(rgn1->h), NULL, NULL);
 
-	if (draw != 0)
+	if (draw)
 		return -1;
 
 	/* region all outside clipping region, at the bottom */
@@ -89,7 +94,7 @@ int test_gdi_ClipCoords(void)
 
 	draw = gdi_ClipCoords(hdc, &(rgn1->x), &(rgn1->y), &(rgn1->w), &(rgn1->h), NULL, NULL);
 
-	if (draw != 0)
+	if (draw)
 		return -1;
 
 	/* left outside, right = clip, top = clip, bottom = clip */
@@ -99,7 +104,7 @@ int test_gdi_ClipCoords(void)
 
 	gdi_ClipCoords(hdc, &(rgn1->x), &(rgn1->y), &(rgn1->w), &(rgn1->h), NULL, NULL);
 
-	if (gdi_EqualRgn(rgn1, rgn2) != 1)
+	if (!gdi_EqualRgn(rgn1, rgn2))
 		return -1;
 
 	/* left outside, right inside, top = clip, bottom = clip */
@@ -109,7 +114,7 @@ int test_gdi_ClipCoords(void)
 
 	gdi_ClipCoords(hdc, &(rgn1->x), &(rgn1->y), &(rgn1->w), &(rgn1->h), NULL, NULL);
 
-	if (gdi_EqualRgn(rgn1, rgn2) != 1)
+	if (!gdi_EqualRgn(rgn1, rgn2))
 		return -1;
 
 	/* left = clip, right outside, top = clip, bottom = clip */
@@ -119,7 +124,7 @@ int test_gdi_ClipCoords(void)
 
 	gdi_ClipCoords(hdc, &(rgn1->x), &(rgn1->y), &(rgn1->w), &(rgn1->h), NULL, NULL);
 
-	if (gdi_EqualRgn(rgn1, rgn2) != 1)
+	if (!gdi_EqualRgn(rgn1, rgn2))
 		return -1;
 
 	/* left inside, right outside, top = clip, bottom = clip */
@@ -129,7 +134,7 @@ int test_gdi_ClipCoords(void)
 
 	gdi_ClipCoords(hdc, &(rgn1->x), &(rgn1->y), &(rgn1->w), &(rgn1->h), NULL, NULL);
 
-	if (gdi_EqualRgn(rgn1, rgn2) != 1)
+	if (!gdi_EqualRgn(rgn1, rgn2))
 		return -1;
 
 	/* top outside, bottom = clip, left = clip, right = clip */
@@ -139,7 +144,7 @@ int test_gdi_ClipCoords(void)
 
 	gdi_ClipCoords(hdc, &(rgn1->x), &(rgn1->y), &(rgn1->w), &(rgn1->h), NULL, NULL);
 
-	if (gdi_EqualRgn(rgn1, rgn2) != 1)
+	if (!gdi_EqualRgn(rgn1, rgn2))
 		return -1;
 
 	/* top = clip, bottom outside, left = clip, right = clip */
@@ -149,7 +154,7 @@ int test_gdi_ClipCoords(void)
 
 	gdi_ClipCoords(hdc, &(rgn1->x), &(rgn1->y), &(rgn1->w), &(rgn1->h), NULL, NULL);
 
-	if (gdi_EqualRgn(rgn1, rgn2) != 1)
+	if (!gdi_EqualRgn(rgn1, rgn2))
 		return -1;
 
 	/* top = clip, bottom = clip, top = clip, bottom = clip */
@@ -159,7 +164,7 @@ int test_gdi_ClipCoords(void)
 
 	gdi_ClipCoords(hdc, &(rgn1->x), &(rgn1->y), &(rgn1->w), &(rgn1->h), NULL, NULL);
 
-	if (gdi_EqualRgn(rgn1, rgn2) != 1)
+	if (!gdi_EqualRgn(rgn1, rgn2))
 		return -1;
 
 	return 0;
@@ -173,7 +178,12 @@ int test_gdi_InvalidateRegion(void)
 	HGDI_RGN invalid;
 	HGDI_BITMAP bmp;
 
-	hdc = gdi_GetDC();
+	if (!(hdc = gdi_GetDC()))
+	{
+		printf("failed to get gdi device context\n");
+		return -1;
+	}
+
 	hdc->bytesPerPixel = 4;
 	hdc->bitsPerPixel = 32;
 	bmp = gdi_CreateBitmap(1024, 768, 4, NULL);
@@ -200,7 +210,7 @@ int test_gdi_InvalidateRegion(void)
 
 	gdi_InvalidateRegion(hdc, rgn1->x, rgn1->y, rgn1->w, rgn1->h);
 
-	if (gdi_EqualRgn(invalid, rgn2) != 1)
+	if (!gdi_EqualRgn(invalid, rgn2))
 		return -1;
 
 	/* region same as invalid region */
@@ -210,7 +220,7 @@ int test_gdi_InvalidateRegion(void)
 
 	gdi_InvalidateRegion(hdc, rgn1->x, rgn1->y, rgn1->w, rgn1->h);
 
-	if (gdi_EqualRgn(invalid, rgn2) != 1)
+	if (!gdi_EqualRgn(invalid, rgn2))
 		return -1;
 
 	/* left outside */
@@ -220,7 +230,7 @@ int test_gdi_InvalidateRegion(void)
 
 	gdi_InvalidateRegion(hdc, rgn1->x, rgn1->y, rgn1->w, rgn1->h);
 
-	if (gdi_EqualRgn(invalid, rgn2) != 1)
+	if (!gdi_EqualRgn(invalid, rgn2))
 		return -1;
 
 	/* right outside */
@@ -230,7 +240,7 @@ int test_gdi_InvalidateRegion(void)
 
 	gdi_InvalidateRegion(hdc, rgn1->x, rgn1->y, rgn1->w, rgn1->h);
 
-	if (gdi_EqualRgn(invalid, rgn2) != 1)
+	if (!gdi_EqualRgn(invalid, rgn2))
 		return -1;
 
 	/* top outside */
@@ -240,7 +250,7 @@ int test_gdi_InvalidateRegion(void)
 
 	gdi_InvalidateRegion(hdc, rgn1->x, rgn1->y, rgn1->w, rgn1->h);
 
-	if (gdi_EqualRgn(invalid, rgn2) != 1)
+	if (!gdi_EqualRgn(invalid, rgn2))
 		return -1;
 
 	/* bottom outside */
@@ -250,7 +260,7 @@ int test_gdi_InvalidateRegion(void)
 
 	gdi_InvalidateRegion(hdc, rgn1->x, rgn1->y, rgn1->w, rgn1->h);
 
-	if (gdi_EqualRgn(invalid, rgn2) != 1)
+	if (!gdi_EqualRgn(invalid, rgn2))
 		return -1;
 
 	/* left outside, right outside */
@@ -260,7 +270,7 @@ int test_gdi_InvalidateRegion(void)
 
 	gdi_InvalidateRegion(hdc, rgn1->x, rgn1->y, rgn1->w, rgn1->h);
 
-	if (gdi_EqualRgn(invalid, rgn2) != 1)
+	if (!gdi_EqualRgn(invalid, rgn2))
 		return -1;
 
 	/* top outside, bottom outside */
@@ -270,7 +280,7 @@ int test_gdi_InvalidateRegion(void)
 
 	gdi_InvalidateRegion(hdc, rgn1->x, rgn1->y, rgn1->w, rgn1->h);
 
-	if (gdi_EqualRgn(invalid, rgn2) != 1)
+	if (!gdi_EqualRgn(invalid, rgn2))
 		return -1;
 
 	/* all outside, left */
@@ -280,7 +290,7 @@ int test_gdi_InvalidateRegion(void)
 
 	gdi_InvalidateRegion(hdc, rgn1->x, rgn1->y, rgn1->w, rgn1->h);
 
-	if (gdi_EqualRgn(invalid, rgn2) != 1)
+	if (!gdi_EqualRgn(invalid, rgn2))
 		return -1;
 
 	/* all outside, right */
@@ -290,7 +300,7 @@ int test_gdi_InvalidateRegion(void)
 
 	gdi_InvalidateRegion(hdc, rgn1->x, rgn1->y, rgn1->w, rgn1->h);
 
-	if (gdi_EqualRgn(invalid, rgn2) != 1)
+	if (!gdi_EqualRgn(invalid, rgn2))
 		return -1;
 
 	/* all outside, top */
@@ -300,7 +310,7 @@ int test_gdi_InvalidateRegion(void)
 
 	gdi_InvalidateRegion(hdc, rgn1->x, rgn1->y, rgn1->w, rgn1->h);
 
-	if (gdi_EqualRgn(invalid, rgn2) != 1)
+	if (!gdi_EqualRgn(invalid, rgn2))
 		return -1;
 
 	/* all outside, bottom */
@@ -310,7 +320,7 @@ int test_gdi_InvalidateRegion(void)
 
 	gdi_InvalidateRegion(hdc, rgn1->x, rgn1->y, rgn1->w, rgn1->h);
 
-	if (gdi_EqualRgn(invalid, rgn2) != 1)
+	if (!gdi_EqualRgn(invalid, rgn2))
 		return -1;
 
 	/* all outside */
@@ -320,7 +330,7 @@ int test_gdi_InvalidateRegion(void)
 
 	gdi_InvalidateRegion(hdc, rgn1->x, rgn1->y, rgn1->w, rgn1->h);
 
-	if (gdi_EqualRgn(invalid, rgn2) != 1)
+	if (!gdi_EqualRgn(invalid, rgn2))
 		return -1;
 
 	/* everything */
@@ -330,7 +340,7 @@ int test_gdi_InvalidateRegion(void)
 
 	gdi_InvalidateRegion(hdc, rgn1->x, rgn1->y, rgn1->w, rgn1->h);
 
-	if (gdi_EqualRgn(invalid, rgn2) != 1)
+	if (!gdi_EqualRgn(invalid, rgn2))
 		return -1;
 
 	return 0;

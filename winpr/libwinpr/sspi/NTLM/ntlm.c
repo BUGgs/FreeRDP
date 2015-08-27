@@ -33,6 +33,7 @@
 #include <winpr/print.h>
 #include <winpr/sysinfo.h>
 #include <winpr/registry.h>
+#include <winpr/tchar.h>
 
 #include "ntlm.h"
 #include "../sspi.h"
@@ -42,27 +43,25 @@
 #include "../../log.h"
 #define TAG WINPR_TAG("sspi.NTLM")
 
+#define WINPR_KEY "Software\\"FREERDP_VENDOR_STRING \
+	"\\"FREERDP_PRODUCT_STRING"\\WinPR\\NTLM"
+
 char* NTLM_PACKAGE_NAME = "NTLM";
 
 int ntlm_SetContextWorkstation(NTLM_CONTEXT* context, char* Workstation)
 {
 	int status;
-	DWORD nSize = 0;
+	DWORD nSize = MAX_COMPUTERNAME_LENGTH;
 	char* ws = Workstation;
+	CHAR computerName[MAX_COMPUTERNAME_LENGTH + 1];
 
 	if (!Workstation)
 	{
-		GetComputerNameExA(ComputerNameNetBIOS, NULL, &nSize);
-		ws = (char*) malloc(nSize);
-
+		if (!GetComputerNameExA(ComputerNameNetBIOS, computerName, &nSize))
+			return -1;
+		ws = _strdup(computerName);
 		if (!ws)
 			return -1;
-
-		if (!GetComputerNameExA(ComputerNameNetBIOS, ws, &nSize))
-		{
-			free(ws);
-			return 0;
-		}
 	}
 
 	context->Workstation.Buffer = NULL;
@@ -114,26 +113,21 @@ int ntlm_SetContextServicePrincipalNameA(NTLM_CONTEXT* context, char* ServicePri
 int ntlm_SetContextTargetName(NTLM_CONTEXT* context, char* TargetName)
 {
 	int status;
-	DWORD nSize = 0;
+	CHAR computerName[MAX_COMPUTERNAME_LENGTH + 1];
+	DWORD nSize = MAX_COMPUTERNAME_LENGTH;
 	char* name = TargetName;
 
-	if (!TargetName)
+	if (!name)
 	{
-		if (!GetComputerNameExA(ComputerNameDnsHostname, NULL, &nSize))
+
+		if (!GetComputerNameExA(ComputerNameDnsHostname, computerName, &nSize))
 			return -1;
 
-		name = (char*) malloc(nSize);
-
+		name = _strdup(computerName);
 		if (!name)
 			return -1;
 
-		if (!GetComputerNameExA(ComputerNameDnsHostname, name, &nSize))
-		{
-			free(name);
-			return -1;
-		}
-
-		CharUpperA(TargetName);
+		CharUpperA(name);
 	}
 
 	context->TargetName.pvBuffer = NULL;
@@ -141,7 +135,8 @@ int ntlm_SetContextTargetName(NTLM_CONTEXT* context, char* TargetName)
 
 	if (status <= 0)
 	{
-		free(TargetName);
+		if (!TargetName)
+			free(name);
 		return -1;
 	}
 
@@ -173,7 +168,7 @@ NTLM_CONTEXT* ntlm_ContextNew()
 	context->SendWorkstationName = TRUE;
 	context->NegotiateKeyExchange = TRUE;
 	context->UseSamFileDatabase = TRUE;
-	status = RegOpenKeyEx(HKEY_LOCAL_MACHINE, _T("Software\\WinPR\\NTLM"), 0, KEY_READ | KEY_WOW64_64KEY, &hKey);
+	status = RegOpenKeyExA(HKEY_LOCAL_MACHINE, WINPR_KEY, 0, KEY_READ | KEY_WOW64_64KEY, &hKey);
 
 	if (status == ERROR_SUCCESS)
 	{
@@ -671,21 +666,27 @@ SECURITY_STATUS SEC_ENTRY ntlm_QueryContextAttributesW(PCtxtHandle phContext, UL
 		context->UseSamFileDatabase = FALSE;
 		credentials = context->credentials;
 		ZeroMemory(AuthIdentity, sizeof(SecPkgContext_AuthIdentity));
-		UserA = AuthIdentity->User;
-		status = ConvertFromUnicode(CP_UTF8, 0, (WCHAR*) credentials->identity.User,
-									credentials->identity.UserLength,
-									&UserA, 256, NULL, NULL);
 
-		if (status <= 0)
-			return SEC_E_INTERNAL_ERROR;
+		UserA = AuthIdentity->User;
+		if (credentials->identity.UserLength > 0) {
+			status = ConvertFromUnicode(CP_UTF8, 0,
+			    (WCHAR *)credentials->identity.User,
+			    credentials->identity.UserLength, &UserA, 256, NULL,
+			    NULL);
+			if (status <= 0)
+				return SEC_E_INTERNAL_ERROR;
+		}
 
 		DomainA = AuthIdentity->Domain;
-		status = ConvertFromUnicode(CP_UTF8, 0, (WCHAR*) credentials->identity.Domain,
-									credentials->identity.DomainLength,
-									&DomainA, 256, NULL, NULL);
+		if (credentials->identity.DomainLength > 0) {
+			status = ConvertFromUnicode(CP_UTF8, 0,
+			    (WCHAR *)credentials->identity.Domain,
+			    credentials->identity.DomainLength, &DomainA, 256,
+			    NULL, NULL);
 
-		if (status <= 0)
-			return SEC_E_INTERNAL_ERROR;
+			if (status <= 0)
+				return SEC_E_INTERNAL_ERROR;
+		}
 
 		return SEC_E_OK;
 	}

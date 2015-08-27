@@ -30,8 +30,7 @@
 #include <freerdp/client/rdpgfx.h>
 #include <freerdp/channels/log.h>
 #include <freerdp/codec/zgfx.h>
-
-#define TAG CHANNELS_TAG("rdpgfx.client")
+#include <freerdp/freerdp.h>
 
 struct _RDPGFX_CHANNEL_CALLBACK
 {
@@ -60,7 +59,6 @@ struct _RDPGFX_PLUGIN
 	IWTSListener* listener;
 	RDPGFX_LISTENER_CALLBACK* listener_callback;
 
-	wLog* log;
 	rdpSettings* settings;
 
 	BOOL ThinClient;
@@ -72,11 +70,13 @@ struct _RDPGFX_PLUGIN
 	ZGFX_CONTEXT* zgfx;
 	UINT32 UnacknowledgedFrames;
 	UINT32 TotalDecodedFrames;
+	BOOL suspendFrameAcks;
 
 	wHashTable* SurfaceTable;
 
 	UINT16 MaxCacheSlot;
 	void* CacheSlots[25600];
+	rdpContext* rdpcontext;
 };
 typedef struct _RDPGFX_PLUGIN RDPGFX_PLUGIN;
 

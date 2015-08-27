@@ -4,6 +4,8 @@
  *
  * Copyright 2012 Jason Champion
  * Copyright 2014 Marc-Andre Moreau <marcandre.moreau@gmail.com>
+ * Copyright 2015 Thincast Technologies GmbH
+ * Copyright 2015 DI (FH) Martin Haimberger <martin.haimberger@thincast.com>
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -104,14 +106,14 @@ HRESULT STDMETHODCALLTYPE CliprdrStream_Read(IStream* This, void *pv, ULONG cb, 
 	*pcbRead = 0;
 
 	if (instance->m_lOffset.QuadPart >= instance->m_lSize.QuadPart)
-		return S_FALSE;
+		return E_FAIL;
 
 	ret = cliprdr_send_request_filecontents(clipboard, (void*) This,
 			instance->m_lIndex, FILECONTENTS_RANGE,
 			instance->m_lOffset.HighPart, instance->m_lOffset.LowPart, cb);
 
 	if (ret < 0)
-		return S_FALSE;
+		return E_FAIL;
 
 	if (clipboard->req_fdata)
 	{
@@ -123,7 +125,7 @@ HRESULT STDMETHODCALLTYPE CliprdrStream_Read(IStream* This, void *pv, ULONG cb, 
 	instance->m_lOffset.QuadPart += clipboard->req_fsize;
 
 	if (clipboard->req_fsize < cb)
-		return S_FALSE;
+		return E_FAIL;
 
 	return S_OK;
 }
@@ -154,11 +156,11 @@ HRESULT STDMETHODCALLTYPE CliprdrStream_Seek(IStream* This, LARGE_INTEGER dlibMo
 			newoffset = instance->m_lSize.QuadPart + dlibMove.QuadPart;
 			break;
 		default:
-			return S_FALSE;
+			return E_INVALIDARG;
 	}
 
 	if (newoffset < 0 || newoffset >= instance->m_lSize.QuadPart)
-		return FALSE;
+		return E_FAIL;
 
 	instance->m_lOffset.QuadPart = newoffset;
 
@@ -736,7 +738,7 @@ HRESULT STDMETHODCALLTYPE CliprdrEnumFORMATETC_Next(IEnumFORMATETC* This, ULONG 
 	if (pceltFetched != 0)
 		*pceltFetched = copied;
 
-	return (copied == celt) ? S_OK : S_FALSE;
+	return (copied == celt) ? S_OK : E_FAIL;
 }
 
 HRESULT STDMETHODCALLTYPE CliprdrEnumFORMATETC_Skip(IEnumFORMATETC* This, ULONG celt)
@@ -744,7 +746,7 @@ HRESULT STDMETHODCALLTYPE CliprdrEnumFORMATETC_Skip(IEnumFORMATETC* This, ULONG 
 	CliprdrEnumFORMATETC* instance = (CliprdrEnumFORMATETC*) This;
 
 	if (instance->m_nIndex + (LONG) celt > instance->m_nNumFormats)
-		return S_FALSE;
+		return E_FAIL;
 
 	instance->m_nIndex += celt;
 
@@ -1443,7 +1445,12 @@ int wf_cliprdr_send_client_capabilities(wfClipboard* clipboard)
 	return 1;
 }
 
-static int wf_cliprdr_monitor_ready(CliprdrClientContext* context, CLIPRDR_MONITOR_READY* monitorReady)
+/**
+ * Function description
+ *
+ * @return 0 on success, otherwise a Win32 error code
+ */
+static UINT wf_cliprdr_monitor_ready(CliprdrClientContext* context, CLIPRDR_MONITOR_READY* monitorReady)
 {
 	wfClipboard* clipboard = (wfClipboard*) context->custom;
 
@@ -1451,10 +1458,15 @@ static int wf_cliprdr_monitor_ready(CliprdrClientContext* context, CLIPRDR_MONIT
 	wf_cliprdr_send_client_capabilities(clipboard);
 	cliprdr_send_format_list(clipboard);
 
-	return 1;
+	return CHANNEL_RC_OK;
 }
 
-static int wf_cliprdr_server_capabilities(CliprdrClientContext* context, CLIPRDR_CAPABILITIES* capabilities)
+/**
+ * Function description
+ *
+ * @return 0 on success, otherwise a Win32 error code
+ */
+static UINT wf_cliprdr_server_capabilities(CliprdrClientContext* context, CLIPRDR_CAPABILITIES* capabilities)
 {
 	UINT32 index;
 	CLIPRDR_CAPABILITY_SET* capabilitySet;
@@ -1475,10 +1487,15 @@ static int wf_cliprdr_server_capabilities(CliprdrClientContext* context, CLIPRDR
 		}
 	}
 	
-	return 1;
+	return CHANNEL_RC_OK;
 }
 
-static int wf_cliprdr_server_format_list(CliprdrClientContext* context, CLIPRDR_FORMAT_LIST* formatList)
+/**
+ * Function description
+ *
+ * @return 0 on success, otherwise a Win32 error code
+ */
+static UINT wf_cliprdr_server_format_list(CliprdrClientContext* context, CLIPRDR_FORMAT_LIST* formatList)
 {
 	UINT32 i, j;
 	formatMapping* mapping;
@@ -1516,7 +1533,7 @@ static int wf_cliprdr_server_format_list(CliprdrClientContext* context, CLIPRDR_
 	else
 	{
 		if (!OpenClipboard(clipboard->hwnd))
-			return -1;
+			return ERROR_INTERNAL_ERROR;
 
 		if (EmptyClipboard())
 		{
@@ -1529,28 +1546,48 @@ static int wf_cliprdr_server_format_list(CliprdrClientContext* context, CLIPRDR_
 		CloseClipboard();
 	}
 
-	return 1;
+	return CHANNEL_RC_OK;
 }
 
-static int wf_cliprdr_server_format_list_response(CliprdrClientContext* context, CLIPRDR_FORMAT_LIST_RESPONSE* formatListResponse)
+/**
+ * Function description
+ *
+ * @return 0 on success, otherwise a Win32 error code
+ */
+static UINT wf_cliprdr_server_format_list_response(CliprdrClientContext* context, CLIPRDR_FORMAT_LIST_RESPONSE* formatListResponse)
 {
 	wfClipboard* clipboard = (wfClipboard*) context->custom;
-	return 1;
+	return CHANNEL_RC_OK;
 }
 
-int wf_cliprdr_server_lock_clipboard_data(CliprdrClientContext* context, CLIPRDR_LOCK_CLIPBOARD_DATA* lockClipboardData)
+/**
+ * Function description
+ *
+ * @return 0 on success, otherwise a Win32 error code
+ */
+UINT wf_cliprdr_server_lock_clipboard_data(CliprdrClientContext* context, CLIPRDR_LOCK_CLIPBOARD_DATA* lockClipboardData)
 {
 	wfClipboard* clipboard = (wfClipboard*) context->custom;
-	return 1;
+	return CHANNEL_RC_OK;
 }
 
-int wf_cliprdr_server_unlock_clipboard_data(CliprdrClientContext* context, CLIPRDR_UNLOCK_CLIPBOARD_DATA* unlockClipboardData)
+/**
+ * Function description
+ *
+ * @return 0 on success, otherwise a Win32 error code
+ */
+UINT wf_cliprdr_server_unlock_clipboard_data(CliprdrClientContext* context, CLIPRDR_UNLOCK_CLIPBOARD_DATA* unlockClipboardData)
 {
 	wfClipboard* clipboard = (wfClipboard*) context->custom;
-	return 1;
+	return CHANNEL_RC_OK;
 }
 
-static int wf_cliprdr_server_format_data_request(CliprdrClientContext* context, CLIPRDR_FORMAT_DATA_REQUEST* formatDataRequest)
+/**
+ * Function description
+ *
+ * @return 0 on success, otherwise a Win32 error code
+ */
+static UINT wf_cliprdr_server_format_data_request(CliprdrClientContext* context, CLIPRDR_FORMAT_DATA_REQUEST* formatDataRequest)
 {
 	int size = 0;
 	char* buff = NULL;
@@ -1576,8 +1613,8 @@ static int wf_cliprdr_server_format_data_request(CliprdrClientContext* context, 
 
 		result = OleGetClipboard(&dataObj);
 
-		if (!SUCCEEDED(result))
-			return -1;
+		if (FAILED(result))
+			return ERROR_INTERNAL_ERROR;
 
 		ZeroMemory(&format_etc, sizeof(FORMATETC));
 		ZeroMemory(&stg_medium, sizeof(STGMEDIUM));
@@ -1615,7 +1652,7 @@ static int wf_cliprdr_server_format_data_request(CliprdrClientContext* context, 
 
 			result = IDataObject_GetData(dataObj, &format_etc, &stg_medium);
 
-			if (!SUCCEEDED(result)) {
+			if (FAILED(result)) {
 				DEBUG_CLIPRDR("dataObj->GetData failed.");
 			}
 
@@ -1707,14 +1744,14 @@ exit:
 	else
 	{
 		if (!OpenClipboard(clipboard->hwnd))
-			return -1;
+			return ERROR_INTERNAL_ERROR;
 
 		hClipdata = GetClipboardData(requestedFormatId);
 
 		if (!hClipdata)
 		{
 			CloseClipboard();
-			return -1;
+			return ERROR_INTERNAL_ERROR;
 		}
 
 		globlemem = (char*) GlobalLock(hClipdata);
@@ -1738,10 +1775,15 @@ exit:
 
 	free(buff);
 
-	return 1;
+	return CHANNEL_RC_OK;
 }
 
-static int wf_cliprdr_server_format_data_response(CliprdrClientContext* context, CLIPRDR_FORMAT_DATA_RESPONSE* formatDataResponse)
+/**
+ * Function description
+ *
+ * @return 0 on success, otherwise a Win32 error code
+ */
+static UINT wf_cliprdr_server_format_data_response(CliprdrClientContext* context, CLIPRDR_FORMAT_DATA_RESPONSE* formatDataResponse)
 {
 	BYTE* data;
 	HANDLE hMem;
@@ -1755,10 +1797,15 @@ static int wf_cliprdr_server_format_data_response(CliprdrClientContext* context,
 	clipboard->hmem = hMem;
 	SetEvent(clipboard->response_data_event);
 
-	return 1;
+	return CHANNEL_RC_OK;
 }
 
-int wf_cliprdr_server_file_contents_request(CliprdrClientContext* context, CLIPRDR_FILE_CONTENTS_REQUEST* fileContentsRequest)
+/**
+ * Function description
+ *
+ * @return 0 on success, otherwise a Win32 error code
+ */
+UINT wf_cliprdr_server_file_contents_request(CliprdrClientContext* context, CLIPRDR_FILE_CONTENTS_REQUEST* fileContentsRequest)
 {
 	UINT32 uSize = 0;
 	BYTE* pData = NULL;
@@ -1782,7 +1829,7 @@ int wf_cliprdr_server_file_contents_request(CliprdrClientContext* context, CLIPR
 
 	hRet = OleGetClipboard(&pDataObj);
 
-	if (!SUCCEEDED(hRet))
+	if (FAILED(hRet))
 	{
 		WLog_ERR(TAG,  "filecontents: get ole clipboard failed.");
 		goto error;
@@ -1911,7 +1958,7 @@ int wf_cliprdr_server_file_contents_request(CliprdrClientContext* context, CLIPR
 
 	free(pData);
 
-	return 1;
+	return CHANNEL_RC_OK;
 
 error:
 	if (pData)
@@ -1929,10 +1976,15 @@ error:
 	WLog_ERR(TAG,  "filecontents: send failed response.");
 	cliprdr_send_response_filecontents(clipboard, fileContentsRequest->streamId, 0, NULL);
 
-	return -1;
+	return ERROR_INTERNAL_ERROR;
 }
 
-int wf_cliprdr_server_file_contents_response(CliprdrClientContext* context, CLIPRDR_FILE_CONTENTS_RESPONSE* fileContentsResponse)
+/**
+ * Function description
+ *
+ * @return 0 on success, otherwise a Win32 error code
+ */
+UINT wf_cliprdr_server_file_contents_response(CliprdrClientContext* context, CLIPRDR_FILE_CONTENTS_RESPONSE* fileContentsResponse)
 {
 	wfClipboard* clipboard = (wfClipboard*) context->custom;
 
@@ -1942,7 +1994,7 @@ int wf_cliprdr_server_file_contents_response(CliprdrClientContext* context, CLIP
 
 	SetEvent(clipboard->req_fevent);
 
-	return 1;
+	return CHANNEL_RC_OK;
 }
 
 void wf_cliprdr_init(wfContext* wfc, CliprdrClientContext* cliprdr)

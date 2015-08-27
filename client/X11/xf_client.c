@@ -222,7 +222,7 @@ void xf_draw_screen(xfContext* xfc, int x, int y, int w, int h)
 	XCopyArea(xfc->display, xfc->primary, xfc->window->handle, xfc->gc, x, y, w, h, x, y);
 }
 
-static void xf_desktop_resize(rdpContext* context)
+static BOOL xf_desktop_resize(rdpContext* context)
 {
 	rdpSettings* settings;
 	xfContext* xfc = (xfContext*) context;
@@ -232,7 +232,8 @@ static void xf_desktop_resize(rdpContext* context)
 	{
 		BOOL same = (xfc->primary == xfc->drawing) ? TRUE : FALSE;
 		XFreePixmap(xfc->display, xfc->primary);
-		xfc->primary = XCreatePixmap(xfc->display, xfc->drawable, xfc->sessionWidth, xfc->sessionHeight, xfc->depth);
+		if (!(xfc->primary = XCreatePixmap(xfc->display, xfc->drawable, xfc->sessionWidth, xfc->sessionHeight, xfc->depth)))
+			return FALSE;
 		if (same)
 			xfc->drawing = xfc->primary;
 	}
@@ -265,6 +266,8 @@ static void xf_desktop_resize(rdpContext* context)
 		XSetForeground(xfc->display, xfc->gc, 0);
 		XFillRectangle(xfc->display, xfc->drawable, xfc->gc, 0, 0, xfc->window->width, xfc->window->height);
 	}
+
+	return TRUE;
 }
 
 BOOL xf_sw_begin_paint(rdpContext* context)
@@ -350,27 +353,33 @@ BOOL xf_sw_desktop_resize(rdpContext* context)
 {
 	rdpGdi* gdi = context->gdi;
 	xfContext* xfc = (xfContext*) context;
+	BOOL ret = FALSE;
 
 	xf_lock_x11(xfc, TRUE);
 
 	xfc->sessionWidth = context->settings->DesktopWidth;
 	xfc->sessionHeight = context->settings->DesktopHeight;
 
-	gdi_resize(gdi, xfc->sessionWidth, xfc->sessionHeight);
+	if (!gdi_resize(gdi, xfc->sessionWidth, xfc->sessionHeight))
+		goto out;
 
 	if (xfc->image)
 	{
 		xfc->image->data = NULL;
 		XDestroyImage(xfc->image);
 
-		xfc->image = XCreateImage(xfc->display, xfc->visual, xfc->depth, ZPixmap, 0,
-				(char*) gdi->primary_buffer, gdi->width, gdi->height, xfc->scanline_pad, 0);
+		if (!(xfc->image = XCreateImage(xfc->display, xfc->visual, xfc->depth, ZPixmap, 0,
+				(char*) gdi->primary_buffer, gdi->width, gdi->height, xfc->scanline_pad, 0)))
+		{
+			goto out;
+		}
 	}
 
-	xf_desktop_resize(context);
+	ret = xf_desktop_resize(context);
 
+out:
 	xf_unlock_x11(xfc, TRUE);
-	return TRUE;
+	return ret;
 }
 
 BOOL xf_hw_begin_paint(rdpContext* context)
@@ -457,16 +466,17 @@ BOOL xf_hw_desktop_resize(rdpContext* context)
 {
 	xfContext* xfc = (xfContext*) context;
 	rdpSettings* settings = xfc->settings;
+	BOOL ret;
 
 	xf_lock_x11(xfc, TRUE);
 
 	xfc->sessionWidth = settings->DesktopWidth;
 	xfc->sessionHeight = settings->DesktopHeight;
 
-	xf_desktop_resize(context);
+	ret = xf_desktop_resize(context);
 
 	xf_unlock_x11(xfc, TRUE);
-	return TRUE;
+	return ret;
 }
 
 BOOL xf_get_fds(freerdp* instance, void** rfds, int* rcount, void** wfds, int* wcount)
@@ -521,7 +531,8 @@ BOOL xf_create_window(xfContext* xfc)
 	height = xfc->sessionHeight;
 
 	if (!xfc->hdc)
-		xfc->hdc = gdi_CreateDC(CLRBUF_32BPP, xfc->bpp);
+		if (!(xfc->hdc = gdi_CreateDC(CLRBUF_32BPP, xfc->bpp)))
+			return FALSE;
 
 	if (!xfc->remote_app)
 	{
@@ -541,6 +552,8 @@ BOOL xf_create_window(xfContext* xfc)
 		if (settings->WindowTitle)
 		{
 			windowTitle = _strdup(settings->WindowTitle);
+			if (!windowTitle)
+				return FALSE;
 		}
 		else if (settings->ServerPort == 3389)
 		{
@@ -589,21 +602,21 @@ BOOL xf_create_window(xfContext* xfc)
 		XFreeModifiermap(xfc->modifierMap);
 
 	xfc->modifierMap = XGetModifierMapping(xfc->display);
-	if (!xfc->gc);
+	if (!xfc->gc)
 		xfc->gc = XCreateGC(xfc->display, xfc->drawable, GCGraphicsExposures, &gcv);
-	if (!xfc->primary);
+	if (!xfc->primary)
 		xfc->primary = XCreatePixmap(xfc->display, xfc->drawable, xfc->sessionWidth, xfc->sessionHeight, xfc->depth);
 	xfc->drawing = xfc->primary;
-	if (!xfc->bitmap_mono);
+	if (!xfc->bitmap_mono)
 		xfc->bitmap_mono = XCreatePixmap(xfc->display, xfc->drawable, 8, 8, 1);
-	if (!xfc->gc_mono);
+	if (!xfc->gc_mono)
 		xfc->gc_mono = XCreateGC(xfc->display, xfc->bitmap_mono, GCGraphicsExposures, &gcv);
 	XSetFunction(xfc->display, xfc->gc, GXcopy);
 	XSetFillStyle(xfc->display, xfc->gc, FillSolid);
 	XSetForeground(xfc->display, xfc->gc, BlackPixelOfScreen(xfc->screen));
 	XFillRectangle(xfc->display, xfc->primary, xfc->gc, 0, 0, xfc->sessionWidth, xfc->sessionHeight);
 	XFlush(xfc->display);
-	if (!xfc->image);
+	if (!xfc->image)
 		xfc->image = XCreateImage(xfc->display, xfc->visual, xfc->depth, ZPixmap, 0,
 			(char*) xfc->primary_buffer, xfc->sessionWidth, xfc->sessionHeight, xfc->scanline_pad, 0);
 
@@ -712,9 +725,14 @@ void xf_toggle_control(xfContext* xfc)
 	xfc->controlToggle = !xfc->controlToggle;
 }
 
-int xf_encomsp_participant_created(EncomspClientContext* context, ENCOMSP_PARTICIPANT_CREATED_PDU* participantCreated)
+/**
+ * Function description
+ *
+ * @return 0 on success, otherwise a Win32 error code
+ */
+UINT xf_encomsp_participant_created(EncomspClientContext* context, ENCOMSP_PARTICIPANT_CREATED_PDU* participantCreated)
 {
-	return 1;
+	return CHANNEL_RC_OK;
 }
 
 void xf_encomsp_init(xfContext* xfc, EncomspClientContext* encomsp)
@@ -981,13 +999,15 @@ BOOL xf_pre_connect(freerdp* instance)
 	freerdp_client_load_addins(channels, instance->settings);
 	freerdp_channels_pre_connect(channels, instance);
 
-	if (!settings->Username)
+	if (!settings->Username && !settings->CredentialsFromStdin)
 	{
 		char* login_name = getlogin();
 
 		if (login_name)
 		{
 			settings->Username = _strdup(login_name);
+			if (!settings->Username)
+				return FALSE;
 			WLog_INFO(TAG, "No user name set. - Using login name: %s", settings->Username);
 		}
 	}
@@ -1005,9 +1025,13 @@ BOOL xf_pre_connect(freerdp* instance)
 	}
 
 	if (!context->cache)
-		context->cache = cache_new(settings);
+	{
+		if (!(context->cache = cache_new(settings)))
+			return FALSE;
+	}
 
-	xf_keyboard_init(xfc);
+	if (!xf_keyboard_init(xfc))
+		return FALSE;
 
 	xf_detect_monitors(xfc, &maxWidth, &maxHeight);
 
@@ -1060,7 +1084,11 @@ BOOL xf_post_connect(freerdp* instance)
 	settings = instance->settings;
 	update = context->update;
 
-	xf_register_graphics(context->graphics);
+	if (!xf_register_graphics(context->graphics))
+	{
+		WLog_ERR(TAG, "failed to register graphics");
+		return FALSE;
+	}
 
 	flags = CLRCONV_ALPHA;
 
@@ -1073,13 +1101,16 @@ BOOL xf_post_connect(freerdp* instance)
 	{
 		rdpGdi* gdi;
 
-		gdi_init(instance, flags, NULL);
+		if (!gdi_init(instance, flags, NULL))
+			return FALSE;
 
 		gdi = context->gdi;
 		xfc->primary_buffer = gdi->primary_buffer;
+		xfc->palette = gdi->palette;
 	}
 	else
 	{
+		xfc->palette = xfc->palette_hwgdi;
 		xfc->srcBpp = settings->ColorDepth;
 		xf_gdi_register_update_callbacks(update);
 	}
@@ -1112,7 +1143,11 @@ BOOL xf_post_connect(freerdp* instance)
 	if (settings->RemoteApplicationMode)
 		xfc->remote_app = TRUE;
 
-	xf_create_window(xfc);
+	if (!xf_create_window(xfc))
+	{
+		WLog_ERR(TAG, "xf_create_window failed");
+		return FALSE;
+	}
 
 	if (settings->SoftwareGdi)
 	{
@@ -1143,7 +1178,8 @@ BOOL xf_post_connect(freerdp* instance)
 	update->SetKeyboardIndicators = xf_keyboard_set_indicators;
 
 	xfc->clipboard = xf_clipboard_new(xfc);
-	freerdp_channels_post_connect(channels, instance);
+	if (freerdp_channels_post_connect(channels, instance) < 0)
+		return FALSE;
 
 	EventArgsInit(&e, "xfreerdp");
 	e.width = settings->DesktopWidth;
@@ -1164,6 +1200,8 @@ static void xf_post_disconnect(freerdp* instance)
 	context = instance->context;
 	xfc = (xfContext*) context;
 
+	freerdp_channels_disconnect(context->channels, instance);
+
 	gdi_free(instance);
 
 	if (xfc->clipboard)
@@ -1181,8 +1219,6 @@ static void xf_post_disconnect(freerdp* instance)
 	}
 
 	xf_keyboard_free(xfc);
-
-	freerdp_channels_disconnect(context->channels, instance);
 }
 
 /** Callback set in the rdp_freerdp structure, and used to get the user's password,
@@ -1197,16 +1233,93 @@ static void xf_post_disconnect(freerdp* instance)
  *  @param domain - unused
  *  @return TRUE if a password was successfully entered. See freerdp_passphrase_read() for more details.
  */
-BOOL xf_authenticate(freerdp* instance, char** username, char** password, char** domain)
+static BOOL xf_authenticate_raw(freerdp* instance, BOOL gateway, char** username,
+		char** password, char** domain)
 {
-	// FIXME: seems this callback may be called when 'username' is not known.
-	// But it doesn't do anything to fix it...
-	*password = malloc(password_size * sizeof(char));
+	const char* auth[] =
+	{
+		"Username: ",
+		"Domain:   ",
+		"Password: "
+	};
+	const char* gw[] =
+	{
+		"GatewayUsername: ",
+		"GatewayDomain:   ",
+		"GatewayPassword: "
+	};
+	const char** prompt = (gateway) ? gw : auth;
 
-	if (freerdp_passphrase_read("Password: ", *password, password_size, instance->settings->CredentialsFromStdin) == NULL)
+	if (!username || !password || !domain)
 		return FALSE;
 
+	if (!*username)
+	{
+		size_t username_size = 0;
+		printf("%s", prompt[0]);
+		if (getline(username, &username_size, stdin) < 0)
+		{
+			WLog_ERR(TAG, "getline returned %s [%d]", strerror(errno), errno);
+			goto fail;
+		}
+
+		if (*username)
+		{
+			*username = StrSep(username, "\r");
+			*username = StrSep(username, "\n");
+		}
+	}
+
+	if (!*domain)
+	{
+		size_t domain_size = 0;
+		printf("%s", prompt[1]);
+		if (getline(domain, &domain_size, stdin) < 0)
+		{
+			WLog_ERR(TAG, "getline returned %s [%d]", strerror(errno), errno);
+			goto fail;
+		}
+
+		if (*domain)
+		{
+			*domain = StrSep(domain, "\r");
+			*domain = StrSep(domain, "\n");
+		}
+	}
+
+	if (!*password)
+	{
+		*password = calloc(password_size, sizeof(char));
+		if (!*password)
+			goto fail;
+
+		if (freerdp_passphrase_read(prompt[2], *password, password_size,
+			instance->settings->CredentialsFromStdin) == NULL)
+			goto fail;
+	}
+
 	return TRUE;
+
+fail:
+	free(*username);
+	free(*domain);
+	free(*password);
+
+	*username = NULL;
+	*domain = NULL;
+	*password = NULL;
+
+	return FALSE;
+}
+
+static BOOL xf_authenticate(freerdp* instance, char** username, char** password, char** domain)
+{
+	return xf_authenticate_raw(instance, FALSE, username, password, domain);
+}
+
+static BOOL xf_gw_authenticate(freerdp* instance, char** username, char** password, char** domain)
+{
+	return xf_authenticate_raw(instance, TRUE, username, password, domain);
 }
 
 /** Callback set in the rdp_freerdp structure, and used to make a certificate validation
@@ -1400,8 +1513,8 @@ void* xf_client_thread(void* param)
 	xfContext* xfc;
 	freerdp* instance;
 	rdpContext* context;
-	HANDLE inputEvent;
-	HANDLE inputThread;
+	HANDLE inputEvent = NULL;
+	HANDLE inputThread = NULL;
 	rdpChannels* channels;
 	rdpSettings* settings;
 
@@ -1512,8 +1625,8 @@ void* xf_client_thread(void* param)
 	if (settings->AsyncInput)
 	{
 		wMessageQueue* inputQueue = freerdp_get_message_queue(instance, FREERDP_INPUT_MESSAGE_QUEUE);
-		MessageQueue_PostQuit(inputQueue, 0);
-		WaitForSingleObject(inputThread, INFINITE);
+		if (MessageQueue_PostQuit(inputQueue, 0))
+			WaitForSingleObject(inputThread, INFINITE);
 		CloseHandle(inputThread);
 	}
 
@@ -1689,6 +1802,7 @@ static BOOL xfreerdp_client_new(freerdp* instance, rdpContext* context)
 	instance->PostConnect = xf_post_connect;
 	instance->PostDisconnect = xf_post_disconnect;
 	instance->Authenticate = xf_authenticate;
+	instance->GatewayAuthenticate = xf_gw_authenticate;
 	instance->VerifyCertificate = xf_verify_certificate;
 	instance->LogonErrorInfo = xf_logon_error_info;
 
@@ -1759,7 +1873,7 @@ static BOOL xfreerdp_client_new(freerdp* instance, rdpContext* context)
 	xfc->invert = (ImageByteOrder(xfc->display) == MSBFirst) ? TRUE : FALSE;
 	xfc->complex_regions = TRUE;
 
-	xfc->x11event = CreateFileDescriptorEvent(NULL, FALSE, FALSE, xfc->xfds);
+	xfc->x11event = CreateFileDescriptorEvent(NULL, FALSE, FALSE, xfc->xfds, WINPR_FD_READ);
 	if (!xfc->x11event)
 	{
 		WLog_ERR(TAG, "Could not create xfds event");

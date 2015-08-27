@@ -147,7 +147,9 @@ BOOL shw_post_connect(freerdp* instance)
 	shw = (shwContext*) instance->context;
 	settings = instance->settings;
 
-	gdi_init(instance, CLRBUF_32BPP, NULL);
+	if (!gdi_init(instance, CLRBUF_32BPP, NULL))
+		return FALSE;
+
 	gdi = instance->context->gdi;
 
 	instance->update->BeginPaint = shw_begin_paint;
@@ -155,9 +157,7 @@ BOOL shw_post_connect(freerdp* instance)
 	instance->update->DesktopResize = shw_desktop_resize;
 	instance->update->SurfaceFrameMarker = shw_surface_frame_marker;
 
-	freerdp_channels_post_connect(instance->context->channels, instance);
-
-	return TRUE;
+	return (freerdp_channels_post_connect(instance->context->channels, instance) >= 0) ;
 }
 
 void* shw_client_thread(void* arg)

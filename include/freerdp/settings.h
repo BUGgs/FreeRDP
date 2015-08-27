@@ -263,6 +263,12 @@ typedef struct _TARGET_NET_ADDRESS TARGET_NET_ADDRESS;
 #define PACKET_COMPR_TYPE_RDP61			0x03
 #define PACKET_COMPR_TYPE_RDP8			0x04
 
+/* Desktop Rotation Flags */
+#define ORIENTATION_LANDSCAPE			0
+#define ORIENTATION_PORTRAIT			90
+#define ORIENTATION_LANDSCAPE_FLIPPED	180
+#define ORIENTATION_PORTRAIT_FLIPPED	270
+
 /* SYSTEM_TIME */
 typedef struct
 {
@@ -392,17 +398,6 @@ typedef struct _GLYPH_CACHE_DEFINITION GLYPH_CACHE_DEFINITION;
 
 /* Monitors */
 
-struct rdp_monitor
-{
-	INT32 x;
-	INT32 y;
-	INT32 width;
-	INT32 height;
-	UINT32 is_primary;
-	UINT32 orig_screen;
-};
-typedef struct rdp_monitor rdpMonitor;
-
 struct _MONITOR_DEF
 {
 	INT32 left;
@@ -422,6 +417,18 @@ struct _MONITOR_ATTRIBUTES
 	UINT32 deviceScaleFactor;
 };
 typedef struct _MONITOR_ATTRIBUTES MONITOR_ATTRIBUTES;
+
+struct rdp_monitor
+{
+	INT32 x;
+	INT32 y;
+	INT32 width;
+	INT32 height;
+	UINT32 is_primary;
+	UINT32 orig_screen;
+	MONITOR_ATTRIBUTES attributes;
+};
+typedef struct rdp_monitor rdpMonitor;
 
 /* Device Redirection */
 
@@ -862,7 +869,12 @@ struct rdp_settings
 	ALIGN64 BOOL SupportGraphicsPipeline; /* 142 */
 	ALIGN64 BOOL SupportDynamicTimeZone; /* 143 */
 	ALIGN64 BOOL SupportHeartbeatPdu; /* 144 */
-	UINT64 padding0192[192 - 145]; /* 145 */
+	ALIGN64 UINT32 DesktopPhysicalWidth; /* 145 */
+	ALIGN64 UINT32 DesktopPhysicalHeight; /* 146 */
+	ALIGN64 UINT16 DesktopOrientation; /* 147 */
+	ALIGN64 UINT32 DesktopScaleFactor; /* 148 */
+	ALIGN64 UINT32 DeviceScaleFactor; /* 149 */
+	UINT64 padding0192[192 - 150]; /* 150 */
 
 	/* Client/Server Security Data */
 	ALIGN64 BOOL UseRdpSecurityLayer; /* 192 */
@@ -903,7 +915,8 @@ struct rdp_settings
 	ALIGN64 UINT32 NumMonitorIds; /* 394 */
 	ALIGN64 UINT32 MonitorLocalShiftX; /*395 */
 	ALIGN64 UINT32 MonitorLocalShiftY; /* 396 */
-	UINT64 padding0448[448 - 397]; /* 397 */
+	ALIGN64 BOOL HasMonitorAttributes; /* 397 */
+	UINT64 padding0448[448 - 398]; /* 398 */
 
 
 	/* Client Message Channel Data */
@@ -1032,7 +1045,8 @@ struct rdp_settings
 	ALIGN64 UINT32 RedirectionTsvUrlLength; /* 1227 */
 	ALIGN64 UINT32 TargetNetAddressCount; /* 1228 */
 	ALIGN64 char** TargetNetAddresses; /* 1229 */
-	UINT64 padding1280[1280 - 1230]; /* 1230 */
+	ALIGN64 UINT32* TargetNetPorts; /* 1230 */
+	UINT64 padding1280[1280 - 1231]; /* 1231 */
 
 	/**
 	 * Security
@@ -1434,17 +1448,17 @@ FREERDP_API int freerdp_addin_replace_argument(ADDIN_ARGV* args, char* previous,
 FREERDP_API int freerdp_addin_set_argument_value(ADDIN_ARGV* args, char* option, char* value);
 FREERDP_API int freerdp_addin_replace_argument_value(ADDIN_ARGV* args, char* previous, char* option, char* value);
 
-FREERDP_API void freerdp_device_collection_add(rdpSettings* settings, RDPDR_DEVICE* device);
+FREERDP_API BOOL freerdp_device_collection_add(rdpSettings* settings, RDPDR_DEVICE* device);
 FREERDP_API RDPDR_DEVICE* freerdp_device_collection_find(rdpSettings* settings, const char* name);
 FREERDP_API RDPDR_DEVICE* freerdp_device_clone(RDPDR_DEVICE* device);
 FREERDP_API void freerdp_device_collection_free(rdpSettings* settings);
 
-FREERDP_API void freerdp_static_channel_collection_add(rdpSettings* settings, ADDIN_ARGV* channel);
+FREERDP_API BOOL freerdp_static_channel_collection_add(rdpSettings* settings, ADDIN_ARGV* channel);
 FREERDP_API ADDIN_ARGV* freerdp_static_channel_collection_find(rdpSettings* settings, const char* name);
 FREERDP_API ADDIN_ARGV* freerdp_static_channel_clone(ADDIN_ARGV* channel);
 FREERDP_API void freerdp_static_channel_collection_free(rdpSettings* settings);
 
-FREERDP_API void freerdp_dynamic_channel_collection_add(rdpSettings* settings, ADDIN_ARGV* channel);
+FREERDP_API BOOL freerdp_dynamic_channel_collection_add(rdpSettings* settings, ADDIN_ARGV* channel);
 FREERDP_API ADDIN_ARGV* freerdp_dynamic_channel_collection_find(rdpSettings* settings, const char* name);
 FREERDP_API ADDIN_ARGV* freerdp_dynamic_channel_clone(ADDIN_ARGV* channel);
 FREERDP_API void freerdp_dynamic_channel_collection_free(rdpSettings* settings);

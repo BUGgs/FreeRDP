@@ -179,24 +179,29 @@ BOOL GetComputerNameA(LPSTR lpBuffer, LPDWORD lpnSize)
 	char* dot;
 	int length;
 	char hostname[256];
-	gethostname(hostname, sizeof(hostname));
+
+	if (gethostname(hostname, sizeof(hostname)) == -1)
+		return FALSE;
 	length = strlen(hostname);
 	dot = strchr(hostname, '.');
 
 	if (dot)
 		length = dot - hostname;
 
+	if (!lpBuffer)
+		return FALSE;
+
 	if (*lpnSize <= length)
 	{
-		*lpnSize = length + 1;
-		return 0;
+		SetLastError(ERROR_BUFFER_OVERFLOW);
+		*lpnSize = length;
+		return FALSE;
 	}
 
-	if (!lpBuffer)
-		return 0;
 
 	CopyMemory(lpBuffer, hostname, length);
 	lpBuffer[length] = '\0';
+	*lpnSize = length;
 	return TRUE;
 }
 
@@ -208,7 +213,8 @@ BOOL GetComputerNameExA(COMPUTER_NAME_FORMAT NameType, LPSTR lpBuffer, LPDWORD l
 	if ((NameType == ComputerNameNetBIOS) || (NameType == ComputerNamePhysicalNetBIOS))
 		return GetComputerNameA(lpBuffer, lpnSize);
 
-	gethostname(hostname, sizeof(hostname));
+	if (gethostname(hostname, sizeof(hostname)) == -1)
+		return FALSE;
 	length = strlen(hostname);
 
 	switch (NameType)
@@ -221,7 +227,7 @@ BOOL GetComputerNameExA(COMPUTER_NAME_FORMAT NameType, LPSTR lpBuffer, LPDWORD l
 		case ComputerNamePhysicalDnsFullyQualified:
 			if (*lpnSize <= length)
 			{
-				*lpnSize = length + 1;
+				*lpnSize = length;
 				return FALSE;
 			}
 
@@ -242,7 +248,7 @@ BOOL GetComputerNameExA(COMPUTER_NAME_FORMAT NameType, LPSTR lpBuffer, LPDWORD l
 BOOL GetComputerNameExW(COMPUTER_NAME_FORMAT NameType, LPWSTR lpBuffer, LPDWORD nSize)
 {
 	WLog_ERR(TAG, "GetComputerNameExW unimplemented");
-	return 0;
+	return FALSE;
 }
 
 /* OSVERSIONINFOEX Structure:
@@ -271,16 +277,16 @@ BOOL GetVersionExA(LPOSVERSIONINFOA lpVersionInformation)
 			lpVersionInformationEx->wReserved = 0;
 		}
 
-		return 1;
+		return TRUE;
 	}
 
-	return 0;
+	return FALSE;
 }
 
 BOOL GetVersionExW(LPOSVERSIONINFOW lpVersionInformation)
 {
 	WLog_ERR(TAG, "GetVersionExW unimplemented");
-	return 1;
+	return TRUE;
 }
 
 void GetSystemTime(LPSYSTEMTIME lpSystemTime)
@@ -674,6 +680,21 @@ BOOL IsProcessorFeaturePresent(DWORD ProcessorFeature)
 }
 
 #endif //_WIN32
+
+DWORD GetTickCountPrecise(void)
+{
+#ifdef _WIN32
+	LARGE_INTEGER freq;
+	LARGE_INTEGER current;
+
+	QueryPerformanceFrequency(&freq);
+	QueryPerformanceCounter(&current);
+
+	return (DWORD) (current.QuadPart * 1000LL / freq.QuadPart);
+#else
+	return GetTickCount();
+#endif
+}
 
 BOOL IsProcessorFeaturePresentEx(DWORD ProcessorFeature)
 {

@@ -376,7 +376,6 @@ void rdp_write_bitmap_capability_set(wStream* s, rdpSettings* settings)
 {
 	int header;
 	BYTE drawingFlags = 0;
-	UINT16 desktopResizeFlag;
 	UINT16 preferredBitsPerPixel;
 
 	Stream_EnsureRemainingCapacity(s, 64);
@@ -406,7 +405,6 @@ void rdp_write_bitmap_capability_set(wStream* s, rdpSettings* settings)
 	else
 		preferredBitsPerPixel = 8;
 
-	desktopResizeFlag = settings->DesktopResize;
 
 	Stream_Write_UINT16(s, preferredBitsPerPixel); /* preferredBitsPerPixel (2 bytes) */
 	Stream_Write_UINT16(s, 1); /* receive1BitPerPixel (2 bytes) */
@@ -415,7 +413,7 @@ void rdp_write_bitmap_capability_set(wStream* s, rdpSettings* settings)
 	Stream_Write_UINT16(s, settings->DesktopWidth); /* desktopWidth (2 bytes) */
 	Stream_Write_UINT16(s, settings->DesktopHeight); /* desktopHeight (2 bytes) */
 	Stream_Write_UINT16(s, 0); /* pad2Octets (2 bytes) */
-	Stream_Write_UINT16(s, desktopResizeFlag); /* desktopResizeFlag (2 bytes) */
+	Stream_Write_UINT16(s, settings->DesktopResize); /* desktopResizeFlag (2 bytes) */
 	Stream_Write_UINT16(s, 1); /* bitmapCompressionFlag (2 bytes) */
 	Stream_Write_UINT8(s, 0); /* highColorFlags (1 byte) */
 	Stream_Write_UINT8(s, drawingFlags); /* drawingFlags (1 byte) */
@@ -2685,10 +2683,21 @@ BOOL rdp_read_bitmap_codecs_capability_set(wStream* s, UINT16 length, rdpSetting
 						Stream_Read_UINT8(s, transformBits); /* transformBits (1 byte) */
 						Stream_Read_UINT8(s, entropyBits); /* entropyBits (1 byte) */
 
-						if (version != 0x0100)
-							return FALSE;
+						if (version == 0x0009)
+						{
+							/* Version 0.9 */
 
-						if (tileSize != 0x0040)
+							if (tileSize != 0x0080)
+								return FALSE;
+						}
+						else if (version == 0x0100)
+						{
+							/* Version 1.0 */
+
+							if (tileSize != 0x0040)
+								return FALSE;
+						}
+						else
 							return FALSE;
 
 						if (colConvBits != 1)
@@ -3585,10 +3594,23 @@ BOOL rdp_recv_demand_active(rdpRdp* rdp, wStream* s)
 		return FALSE;
 	}
 
+	if (pduType == PDU_TYPE_DATA)
+	{
+		/**
+		 * We can receive a Save Session Info Data PDU containing a LogonErrorInfo
+		 * structure at this point from the server to indicate a connection error.
+		 */
+
+		if (rdp_recv_data_pdu(rdp, s) < 0)
+			return FALSE;
+
+		return FALSE;
+	}
+
 	if (pduType != PDU_TYPE_DEMAND_ACTIVE)
 	{
 		if (pduType != PDU_TYPE_SERVER_REDIRECTION)
-			WLog_ERR(TAG,  "expected PDU_TYPE_DEMAND_ACTIVE %04x, got %04x", PDU_TYPE_DEMAND_ACTIVE, pduType);
+			WLog_ERR(TAG, "expected PDU_TYPE_DEMAND_ACTIVE %04x, got %04x", PDU_TYPE_DEMAND_ACTIVE, pduType);
 
 		return FALSE;
 	}

@@ -589,6 +589,8 @@ int freerdp_urbdrc_client_subsystem_entry(PFREERDP_URBDRC_SERVICE_ENTRY_POINTS p
 	libusb_init(NULL);
 
 	udevman = (PUDEVMAN) malloc(sizeof(UDEVMAN));
+	if (!udevman)
+		return -1;
 	udevman->device_num = 0;
 	udevman->idev = NULL;
 	udevman->head = NULL;
@@ -609,6 +611,8 @@ int freerdp_urbdrc_client_subsystem_entry(PFREERDP_URBDRC_SERVICE_ENTRY_POINTS p
 	urbdrc_udevman_parse_addin_args(udevman, args);
 
 	pEntryPoints->pRegisterUDEVMAN(pEntryPoints->plugin, (IUDEVMAN*) udevman);
+
+	WLog_DBG(TAG, "UDEVMAN device registered.");
 
 	return 0;
 }

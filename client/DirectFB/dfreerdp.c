@@ -179,9 +179,7 @@ BOOL df_pre_connect(freerdp* instance)
 
 	freerdp_channels_pre_connect(instance->context->channels, instance);
 
-	instance->context->cache = cache_new(instance->settings);
-
-	return TRUE;
+	return (instance->context->cache = cache_new(instance->settings)) != NULL;
 }
 
 BOOL df_post_connect(freerdp* instance)
@@ -193,7 +191,9 @@ BOOL df_post_connect(freerdp* instance)
 	context = ((dfContext*) instance->context);
 	dfi = context->dfi;
 
-	gdi_init(instance, CLRCONV_ALPHA | CLRCONV_INVERT | CLRBUF_16BPP | CLRBUF_32BPP, NULL);
+	if (!gdi_init(instance, CLRCONV_ALPHA | CLRCONV_INVERT | CLRBUF_16BPP | CLRBUF_32BPP, NULL))
+		return FALSE;
+
 	gdi = instance->context->gdi;
 
 	dfi->err = DirectFBCreate(&(dfi->dfb));
@@ -235,9 +235,7 @@ BOOL df_post_connect(freerdp* instance)
 	pointer_cache_register_callbacks(instance->update);
 	df_register_graphics(instance->context->graphics);
 
-	freerdp_channels_post_connect(instance->context->channels, instance);
-
-	return TRUE;
+	return freerdp_channels_post_connect(instance->context->channels, instance) >= 0;
 }
 
 BOOL df_verify_certificate(freerdp* instance, char* subject, char* issuer, char* fingerprint)
